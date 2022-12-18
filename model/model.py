@@ -1,5 +1,6 @@
-from transformers import ViTFeatureExtractor, ViTForImageClassification
-from datasets import Image, Dataset
+from transformers import ViTFeatureExtractor, ViTForImageClassification, TrainingArguments, Trainer
+import numpy as np
+from datasets import Image, Dataset, load_metric
 from torchvision.transforms import (CenterCrop, 
                                     Compose, 
                                     Normalize, 
@@ -100,12 +101,49 @@ def val_transforms(examples):
 train_ds.set_transform(train_transforms)
 val_ds.set_transform(val_transforms)
 
-print(train_ds[:2])
+# print(train_ds[:2])
 
-# def collate_fn(examples):
-#     pixel_values = torch.stack([example["pixel_values"] for example in examples])
-#     labels = torch.tensor([example["label"] for example in examples])
-#     return {"pixel_values": pixel_values, "labels": labels}
+metric_name = "accuracy"
+
+args = TrainingArguments(
+    'nndl_checkpoints_etc',
+    save_strategy="epoch",
+    evaluation_strategy="epoch",
+    learning_rate=2e-5,
+    per_device_train_batch_size=10,
+    per_device_eval_batch_size=4,
+    num_train_epochs=3,
+    weight_decay=0.01,
+    load_best_model_at_end=True,
+    metric_for_best_model=metric_name,
+    logging_dir='logs',
+    remove_unused_columns=False,
+)
+     
+metric = load_metric("accuracy")
+
+def compute_metrics(eval_pred):
+    predictions, labels = eval_pred
+    predictions = np.argmax(predictions, axis=1)
+    return metric.compute(predictions=predictions, references=labels)
+
+def collate_fn(examples):
+    pixel_values = torch.stack([example["pixel_values"] for example in examples])
+    labels = torch.tensor([example["label"] for example in examples])
+    return {"pixel_values": pixel_values, "labels": labels}
+
+trainer = Trainer(
+    model,
+    args,
+    train_dataset=train_ds,
+    eval_dataset=val_ds,
+    data_collator=collate_fn,
+    compute_metrics=compute_metrics,
+    tokenizer=feature_extractor,
+)
+
+trainer.train()
+
 
 # train_dataloader = DataLoader(train_ds, collate_fn=collate_fn, batch_size=4)
 
