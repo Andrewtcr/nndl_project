@@ -3,7 +3,7 @@ from datasets import Image, Dataset
 import os
 
 
-DATASET_DIR = 'subclass_training_data/train'
+DATASET_DIR = '../data/subclass_training_data/train'
 
 
 # Hangs like hell and i dont know why
