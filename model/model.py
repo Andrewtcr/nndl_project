@@ -40,6 +40,7 @@ dataset = Dataset.from_dict({'image': training_images, 'label': training_labels}
 
 dataset.shuffle(seed=42)
 print(dataset[0])
+print(label_names)
 
 
 ### FROM VIT CARD https://huggingface.co/google/vit-base-patch16-224 ###
@@ -50,9 +51,9 @@ splits = dataset.train_test_split(test_size=0.1)
 train_ds = splits['train']
 val_ds = splits['test']
 
-print(train_ds['label'])
+# print(train_ds['label'])
 
-id2label = {id:label for id, label in enumerate(train_ds.features['label'].names)}
+id2label = {id:label for id, label in enumerate(label_names)}
 label2id = {label:id for id, label in id2label.items()}
 
 print(id2label)
@@ -60,7 +61,7 @@ print(label2id)
 
 feature_extractor = ViTFeatureExtractor.from_pretrained('google/vit-base-patch16-224')
 model = ViTForImageClassification.from_pretrained('google/vit-base-patch16-224-in21k',
-                                                  num_labels=10,
+                                                  num_labels=89,
                                                   id2label=id2label,
                                                   label2id=label2id)
 # inputs = feature_extractor(images=image, return_tensors="pt")
