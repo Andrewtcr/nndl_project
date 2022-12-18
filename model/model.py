@@ -1,9 +1,18 @@
 from transformers import ViTFeatureExtractor, ViTForImageClassification
 from datasets import Image, Dataset
+from torchvision.transforms import (CenterCrop, 
+                                    Compose, 
+                                    Normalize, 
+                                    RandomHorizontalFlip,
+                                    RandomResizedCrop, 
+                                    Resize, 
+                                    ToTensor)                        
+from torch.utils.data import DataLoader
+import torch
 import os
 
 
-DATASET_DIR = '../data/subclass_training_data/train'
+DATASET_DIR = './data/subclass_training_data/train'
 
 
 # Hangs like hell and i dont know why
@@ -35,15 +44,80 @@ print(dataset[0])
 
 ### FROM VIT CARD https://huggingface.co/google/vit-base-patch16-224 ###
 # url = 'http://images.cocodataset.org/val2017/000000039769.jpg'
-image = dataset[0]['image']
+# image = dataset[0]['image']
+
+splits = dataset.train_test_split(test_size=0.1)
+train_ds = splits['train']
+val_ds = splits['test']
+
+print(train_ds['label'])
+
+id2label = {id:label for id, label in enumerate(train_ds.features['label'].names)}
+label2id = {label:id for id, label in id2label.items()}
+
+print(id2label)
+print(label2id)
 
 feature_extractor = ViTFeatureExtractor.from_pretrained('google/vit-base-patch16-224')
-model = ViTForImageClassification.from_pretrained('google/vit-base-patch16-224')
+model = ViTForImageClassification.from_pretrained('google/vit-base-patch16-224-in21k',
+                                                  num_labels=10,
+                                                  id2label=id2label,
+                                                  label2id=label2id)
+# inputs = feature_extractor(images=image, return_tensors="pt")
 
-inputs = feature_extractor(images=image, return_tensors="pt")
-outputs = model(**inputs)
-logits = outputs.logits
-# model predicts one of the 1000 ImageNet classes
-predicted_class_idx = logits.argmax(-1).item()
-print("Predicted class:", model.config.id2label[predicted_class_idx])
+print(feature_extractor.size)
+resize_seq = (feature_extractor.size['height'], feature_extractor.size['width'])
+
+normalize = Normalize(mean=feature_extractor.image_mean, std=feature_extractor.image_std)
+_train_transforms = Compose(
+        [
+            RandomResizedCrop(resize_seq),
+            RandomHorizontalFlip(),
+            ToTensor(),
+            normalize,
+        ]
+    )
+
+_val_transforms = Compose(
+        [
+            Resize(resize_seq),
+            CenterCrop(resize_seq),
+            ToTensor(),
+            normalize,
+        ]
+    )
+
+def train_transforms(examples):
+    examples['pixel_values'] = [_train_transforms(image.convert("RGB")) for image in examples['image']]
+    return examples
+
+def val_transforms(examples):
+    examples['pixel_values'] = [_val_transforms(image.convert("RGB")) for image in examples['image']]
+    return examples
+
+# Set the transforms
+train_ds.set_transform(train_transforms)
+val_ds.set_transform(val_transforms)
+
+print(train_ds[:2])
+
+# def collate_fn(examples):
+#     pixel_values = torch.stack([example["pixel_values"] for example in examples])
+#     labels = torch.tensor([example["label"] for example in examples])
+#     return {"pixel_values": pixel_values, "labels": labels}
+
+# train_dataloader = DataLoader(train_ds, collate_fn=collate_fn, batch_size=4)
+
+# batch = next(iter(train_dataloader))
+# for k,v in batch.items():
+#   if isinstance(v, torch.Tensor):
+#     print(k, v.shape)
+
+
+
+# outputs = model(**inputs)
+# logits = outputs.logits
+# # model predicts one of the 1000 ImageNet classes
+# predicted_class_idx = logits.argmax(-1).item()
+# print("Predicted class:", model.config.id2label[predicted_class_idx])
 
